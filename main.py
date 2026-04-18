@@ -10,15 +10,14 @@ from astrbot.api import logger
 
 from astrbot.api.event import filter, AstrMessageEvent
 from .utils.ai_handler import generate_quiz, generate_snarky_eval
-from .utils.db_handler import init_db, record_play, get_hot_quizzes, get_user_history
-
-from .utils.templates import RESULT_TMPL, INVITE_TMPL
-
+from .utils.db_handler import DatabaseHandler
+import html
+import random
 
 @register(
     "astrbot_plugin_orangequiz",
     "largefox",
-    "让让大模型化身性格鉴定师！LLM自动生成互动问卷，智能分析结果，测完还送一张属性海报。",
+    "让bot化身性格鉴定师！LLM自动生成互动问卷，智能分析结果，测完还送一张属性海报。",
     "1.0.1",
     "",
 )
@@ -128,7 +127,8 @@ class OrangeQuiz(Star):
             # Double-check after acquiring the lock
             if self._initialized:
                 return
-            await init_db(self.base_data_dir)
+            self.db = DatabaseHandler(str(self.base_data_dir))
+            await self.db.init_db()
             asyncio.create_task(self._temp_cleanup_loop())
             self._initialized = True
 
@@ -139,7 +139,7 @@ class OrangeQuiz(Star):
                 current_time = time.time()
                 if os.path.exists(self.temp_dir):
                     for filename in os.listdir(self.temp_dir):
-                        filepath = os.path.join(self.temp_dir, filename)
+                        filepath = self.temp_dir / filename
                         if os.path.isfile(filepath):
                             # Clean up files older than 1 hour
                             if current_time - os.path.getmtime(filepath) > 3600:
@@ -191,21 +191,24 @@ class OrangeQuiz(Star):
                     conversation.persona_id
                 )
                 if persona:
-                    return getattr(
+                    prompt_val = getattr(
                         persona,
-                        "prompt",
+                        "system_prompt",
                         getattr(
                             persona,
-                            "description",
-                            getattr(persona, "bot_info", str(persona)),
+                            "prompt",
+                            getattr(persona, "description", getattr(persona, "bot_info", "")),
                         ),
                     )
+                    if prompt_val and isinstance(prompt_val, str):
+                        return prompt_val
+                    return ""
         except Exception as e:
             logger.error(f"Failed to fetch persona profile: {e}")
         return ""
 
     def _load_quiz(self, test_id: str) -> Dict:
-        filepath = os.path.join(self.quizzes_dir, f"{test_id}.json")
+        filepath = self.quizzes_dir / f"{test_id}.json"
         if not os.path.exists(filepath):
             return None
         try:
@@ -215,7 +218,7 @@ class OrangeQuiz(Star):
             logger.error(f"OrangeQuiz error: {e}")
             return None
 
-    @filter.command("测试列表", alias=["问卷列表"], priority=1)
+    @filter.command("quiz_list", alias=["测试列表", "问卷列表"], priority=1)
     async def quiz_list(self, event: AstrMessageEvent):
         event.stop_event()
         files = [f for f in os.listdir(self.quizzes_dir) if f.endswith(".json")]
@@ -227,7 +230,7 @@ class OrangeQuiz(Star):
         for file in files:
             try:
                 with open(
-                    os.path.join(self.quizzes_dir, file), "r", encoding="utf-8"
+                    self.quizzes_dir / file, "r", encoding="utf-8"
                 ) as f:
                     data = json.load(f)
                     author_postfix = f" (作者: {data.get('author', '未知')})"
@@ -242,10 +245,10 @@ class OrangeQuiz(Star):
         else:
             yield event.plain_result("这里空空如也，并没有任何可用的测试问卷呢...")
 
-    @filter.command("热门测试", alias=["测试排名"], priority=1)
+    @filter.command("quiz_hot", alias=["热门测试", "测试排名"], priority=1)
     async def quiz_hot(self, event: AstrMessageEvent):
         event.stop_event()
-        hot_list = await get_hot_quizzes(5)
+        hot_list = await self.db.get_hot_quizzes(5)
         if not hot_list:
             yield event.plain_result("目前还没有人完成过任何问卷测试！快去争夺第一吧！")
             return
@@ -267,7 +270,7 @@ class OrangeQuiz(Star):
 
         yield event.plain_result(reply)
 
-    @filter.command("创建测试", alias=["新增问卷", "出题"], priority=1)
+    @filter.command("quiz_create", alias=["创建测试", "新增问卷", "出题"], priority=1)
     async def quiz_create(self, event: AstrMessageEvent):
         event.stop_event()
         user_id = event.get_sender_id()
@@ -292,9 +295,7 @@ class OrangeQuiz(Star):
                 return
 
             limit = int(self.config.get("daily_create_limit", 3))
-            from .utils.db_handler import get_daily_create_count
-
-            created = await get_daily_create_count(user_id)
+            created = await self.db.get_daily_create_count(user_id)
             if created >= limit:
                 yield event.plain_result(
                     f"⚠️ 您今天已经生成过 {created} 份问卷了，超出了每日 {limit} 次的限制，请明天再来吧！"
@@ -322,27 +323,6 @@ class OrangeQuiz(Star):
 
         args_str = f"{a1} {a2} {a3}".lower().strip()
 
-        # Dispatch subcommands
-        if args_str == "list":
-            async for res in self.quiz_list(event):
-                yield res
-            return
-        elif args_str == "hot":
-            async for res in self.quiz_hot(event):
-                yield res
-            return
-        elif args_str == "create":
-            async for res in self.quiz_create(event):
-                yield res
-            return
-        elif args_str in ["stop", "quit", "exit"]:
-            async for res in self.quiz_stop(event):
-                yield res
-            return
-        elif args_str == "help":
-            async for res in self.quiz_help(event):
-                yield res
-            return
 
         session_key = f"{event.unified_msg_origin}_{event.get_sender_id()}"
         if session_key in self.create_sessions:
@@ -351,7 +331,7 @@ class OrangeQuiz(Star):
             self.sessions[session_key]["last_active"] = time.time()
         if session_key in self.sessions and "quiz" in self.sessions[session_key]:
             yield event.plain_result(
-                f"你已经在答题中了！请先完成或使用 {self.get_prefix()}退出测试 强制结束。"
+                f"你已经在答题中了！请先完成或使用 {self.get_prefix()}quiz_stop 强制结束。"
             )
             return
 
@@ -393,7 +373,7 @@ class OrangeQuiz(Star):
             return
 
         if not force_retry:
-            history = await get_user_history(event.get_sender_id(), quiz_id)
+            history = await self.db.get_user_history(event.get_sender_id(), quiz_id)
             if history:
                 if "group" not in event.unified_msg_origin.lower():
                     yield event.plain_result(
@@ -441,9 +421,7 @@ class OrangeQuiz(Star):
             f"开始了！{quiz_data.get('title')} (作者: {author}){desc_line}\n\n{self._format_question(quiz_data, 0)}"
         )
 
-    @filter.command(
-        "退出测试", alias=["停止测试", "结束答题", "取消", "退出"], priority=1
-    )
+    @filter.command("quiz_stop", alias=["退出测试", "停止测试", "结束答题", "取消", "退出"], priority=1)
     async def quiz_stop(self, event: AstrMessageEvent):
         event.stop_event()
         session_key = f"{event.unified_msg_origin}_{event.get_sender_id()}"
@@ -455,7 +433,7 @@ class OrangeQuiz(Star):
             del self.sessions[session_key]
             yield event.plain_result("已强制结束当前答题。")
 
-    @filter.command("测试帮助", alias=["问卷帮助", "答题帮助"], priority=1)
+    @filter.command("quiz_help", alias=["测试帮助", "问卷帮助", "答题帮助"], priority=1)
     async def quiz_help(self, event: AstrMessageEvent):
         event.stop_event()
         p = self.get_prefix()
@@ -496,6 +474,19 @@ class OrangeQuiz(Star):
         text += "\n请回复选项（例如 A 或 B, 也可以回复 1 或 2）或回复“取消”退出答题"
         return text
 
+    def _load_template(self, t_type: str, theme_name: str) -> str:
+        theme_name = theme_name if theme_name else "default"
+        plugin_dir = Path(__file__).parent
+        tmpl_path = plugin_dir / "templates" / f"{t_type}_{theme_name}.html"
+        if not tmpl_path.exists():
+            tmpl_path = plugin_dir / "templates" / f"{t_type}_default.html"
+        try:
+            with open(tmpl_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"OrangeQuiz: Failed to load HTML template {tmpl_path}: {e}")
+            return ""
+
     async def _render_poster(self, event, test_id, quiz_title, cat_name, snarky_eval):
         user_name = "玩家"
         if hasattr(event, "get_sender_name"):
@@ -532,7 +523,9 @@ class OrangeQuiz(Star):
             "footer_text": footer_text,
             "invite_tip_text": invite_tip_text,
         }
-        return await self.html_render(RESULT_TMPL, data)
+        theme = self.config.get("result_theme", "default")
+        html_str = self._load_template("result", theme)
+        return await self.html_render(html_str, data)
 
     async def _render_invite_poster(
         self, event, test_id, quiz_title, q_count, author_name, quiz_desc
@@ -566,7 +559,9 @@ class OrangeQuiz(Star):
             "footer_text": footer_text,
             "invite_tip_text": invite_tip_text,
         }
-        return await self.html_render(INVITE_TMPL, data)
+        theme = self.config.get("invite_theme", "default")
+        html_str = self._load_template("invite", theme)
+        return await self.html_render(html_str, data)
 
     def _format_preview(self, quiz_data: dict) -> str:
         q_count = len(quiz_data.get("questions", []))
@@ -758,27 +753,24 @@ class OrangeQuiz(Star):
                         )
                         return
 
-                    import random
-
+                    
                     def generate_6_digit() -> str:
                         while True:
                             code = str(random.randint(100000, 999999))
                             if not os.path.exists(
-                                os.path.join(self.quizzes_dir, f"{code}.json")
+                                self.quizzes_dir / f"{code}.json"
                             ):
                                 return code
 
                     test_id = generate_6_digit()
                     quiz_data["test_id"] = test_id
 
-                    filepath = os.path.join(self.quizzes_dir, f"{test_id}.json")
+                    filepath = self.quizzes_dir / f"{test_id}.json"
                     try:
                         with open(filepath, "w", encoding="utf-8") as f:
                             json.dump(quiz_data, f, ensure_ascii=False, indent=2)
 
-                        from .utils.db_handler import record_create
-
-                        await record_create(event.get_sender_id())
+                        await self.db.record_create(event.get_sender_id())
 
                         yield event.plain_result(
                             f"✅ 保存并启用成功！分配的测试专享编码为： {test_id} \n\n别人可以直接发送：\n{self.get_prefix()}quiz {test_id}\n立刻开启本问卷的体验！"
@@ -922,24 +914,39 @@ class OrangeQuiz(Star):
         q_idx = session["current_q_idx"]
         question = quiz_data["questions"][q_idx]
 
-        answer = event.message_str.strip().upper()
+        import re
+        raw_msg = str(event.message_str).strip()
+        
+        # 兼容全角字母映射
+        fullwidth_map = str.maketrans(
+            "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        )
+        raw_msg = raw_msg.translate(fullwidth_map)
+        
+        # 提取第一个连续的字母或数字（例如把 "选项A", "a." 统一转换为 "A"）
+        match = re.search(r"([A-Za-z0-9]+)", raw_msg)
+        if match:
+            answer = match.group(1).upper()
+        else:
+            answer = raw_msg.upper()
 
         # map 1,2,3,4 -> A,B,C,D assuming A is 1, B is 2, etc. (for simple index mapping if options have labels A, B)
         # To be safe, if user inputs '1', we cast to int, then get the 0th option's label.
         if answer.isdigit():
             idx = int(answer) - 1
             if 0 <= idx < len(question["options"]):
-                answer = question["options"][idx]["label"].upper()
+                answer = str(question["options"][idx].get("label", "")).strip().upper()
 
-        valid_labels = [opt["label"].upper() for opt in question["options"]]
+        valid_labels = [str(opt.get("label", "")).strip().upper() for opt in question["options"]]
         if answer not in valid_labels:
             event.stop_event()
-            yield event.plain_result("无效的选项，请重新输入（如 A, B 或 1, 2）。")
+            yield event.plain_result(f"无效的选项，请重新输入（有效选项: {', '.join(valid_labels)}）")
             return
 
         # calculate weights
         selected_opt = next(
-            (opt for opt in question["options"] if opt["label"].upper() == answer), None
+            (opt for opt in question["options"] if str(opt.get("label", "")).strip().upper() == answer), None
         )
         if selected_opt and "weights" in selected_opt:
             for category, weight in selected_opt["weights"].items():
@@ -962,8 +969,7 @@ class OrangeQuiz(Star):
             # Finish
 
             if quiz_data.get("type") == "random":
-                import random
-
+                
                 outcomes = quiz_data.get("results_logic", {}).get("outcomes", [])
                 if outcomes:
                     picked = random.choice(outcomes)
@@ -1040,7 +1046,7 @@ class OrangeQuiz(Star):
                 if hasattr(event, "get_sender_name"):
                     user_name = event.get_sender_name()
 
-                await record_play(
+                await self.db.record_play(
                     user_id, user_name, session["test_id"], cat_name, snarky_eval
                 )
 

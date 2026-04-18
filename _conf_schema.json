@@ -45,5 +45,17 @@
     "type": "bool",
     "default": false,
     "hint": "✅ 开启: 只有Bot管理员可以使用 /quiz_create 创建新问卷。\n❌ 关闭: 所有人均可创建（受每日上限限制）。"
+  },
+  "result_theme": {
+    "description": "结果海报主题",
+    "type": "string",
+    "default": "default",
+    "hint": "选择结果海报的渲染主题。主题文件需命名为 result_主题名.html 存放于插件 templates/ 目录下"
+  },
+  "invite_theme": {
+    "description": "分享海报主题",
+    "type": "string",
+    "default": "default",
+    "hint": "选择分享海报的渲染主题。主题文件需命名为 invite_主题名.html 存放于插件 templates/ 目录下"
   }
 }

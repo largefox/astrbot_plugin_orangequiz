@@ -1,6 +1,6 @@
 name: astrbot_plugin_orangequiz
 display_name: 橘子测试
-desc: "让大模型化身性格鉴定师！LLM自动生成互动问卷，智能分析结果，测完还送一张属性海报。"
+desc: "让bot化身性格鉴定师！LLM自动生成互动问卷，智能分析结果，测完还送一张属性海报。"
 version: v1.0.1
 author: largefox
 repo: https://github.com/largefox/astrbot_plugin_orangequiz
