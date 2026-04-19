@@ -4,7 +4,7 @@ import datetime
 
 class DatabaseHandler:
     def __init__(self, db_dir: str):
-        self.db_path = Path(db_dir) / "orangequiz.db"
+        self.db_path = Path(db_dir) / "orangevibe.db"
 
     async def init_db(self):
         async with aiosqlite.connect(self.db_path, timeout=15.0) as db:
@@ -66,6 +66,17 @@ class DatabaseHandler:
                     {"test_id": row["test_id"], "play_count": row["play_count"]}
                     for row in rows
                 ]
+
+    async def get_same_result_users(self, test_id: str, result_name: str, exclude_user_id: str):
+        """Fetch a list of user_ids who got the identical result_name on the identical test_id, excluding oneself."""
+        async with aiosqlite.connect(self.db_path, timeout=15.0) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT DISTINCT user_id FROM play_history WHERE test_id = ? AND result_name = ? AND user_id != ?",
+                (test_id, result_name, exclude_user_id),
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [row["user_id"] for row in rows]
 
     async def get_user_history(self, user_id: str, test_id: str):
         async with aiosqlite.connect(self.db_path, timeout=15.0) as db:

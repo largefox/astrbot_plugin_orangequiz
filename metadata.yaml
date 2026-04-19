@@ -1,6 +1,6 @@
-name: astrbot_plugin_orangequiz
-display_name: 橘子测试
-desc: "让bot化身性格鉴定师！LLM自动生成互动问卷，智能分析结果，测完还送一张属性海报。"
-version: v1.0.1
+name: astrbot_plugin_orangevibe
+display_name: 橘子鉴定
+desc: "互动式成分鉴定插件，答题可生成AI专属锐评的海报，支持LLM辅助生成测试方案，分享结果至群聊还能探测同成分群友。"
+version: v1.0.0
 author: largefox
-repo: https://github.com/largefox/astrbot_plugin_orangequiz
+repo: https://github.com/largefox/astrbot_plugin_orangevibe

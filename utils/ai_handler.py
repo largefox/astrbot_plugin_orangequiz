@@ -4,22 +4,22 @@ from astrbot.api.all import Context
 
 from astrbot.api import logger
 
-QUIZ_GEN_PROMPT = """你是一个专业的心理学测试或娱乐测试出题人。你需要根据给定的标题和内容方向，生成一份问卷。
+QUIZ_GEN_PROMPT = """你是一个专业的心理学鉴定或娱乐鉴定结命人。你需要根据给定的标题和内容方向，生成一份鉴定。
 返回的格式必须是纯 JSON，不需要使用 Markdown 代码块包裹，也不要有任何其他分析和解释。
 
 要求：
-1. 请根据用户的描述判断该问卷属于【计分类(如智商测试、性格得分)】还是【完全随机分配类(如测测你是哪种动物纯娱乐)】。如果未明确，默认使用计分类。
+1. 请根据用户的描述判断该鉴定属于【计分类(如智商鉴定、性格得分)】还是【完全随机分配类(如测测你是哪种动物纯娱乐)】。如果未明确，默认使用计分类。
 2. 尽量保证题目数量不要超过 6 道题。
-3. 问卷标题：{title}
+3. 鉴定标题：{title}
 4. 内容设定或草稿：{content}
 5. 当前人格设定：{persona_prompt}
-请务必结合你当前的人格设定特征，将其无缝融入到题干描述和选项的语气中。如果没有特别的人格设定，请以专业且有趣的常规身份出题。
+请务必结合你当前的人格设定特征，将其无缝融入到题干描述和选项的语气中。如果没有特别的人格设定，请以专业且有趣的常规身份结命。
 
 JSON 格式要求如下（请严格遵守二选一）：
 
 如果是【计分类 (scoring)】：
 {{
-  "test_id": "", "title": "{title}", "desc": "一两句话的问卷趣味简介", "type": "scoring", "ai_tone": "{tone}",
+  "test_id": "", "title": "{title}", "desc": "一两句话的鉴定趣味简介", "type": "scoring", "ai_tone": "{tone}",
   "questions": [
     {{
       "q_id": 1, "text": "题目内容",
@@ -35,7 +35,7 @@ JSON 格式要求如下（请严格遵守二选一）：
 
 如果是【完全随机类 (random)】，不依赖选项计分，结果纯盲盒：
 {{
-  "test_id": "", "title": "{title}", "desc": "一两句话的问卷趣味简介", "type": "random", "ai_tone": "{tone}",
+  "test_id": "", "title": "{title}", "desc": "一两句话的鉴定趣味简介", "type": "random", "ai_tone": "{tone}",
   "questions": [
     {{
       "q_id": 1, "text": "题目内容但无需 weights",
@@ -54,17 +54,17 @@ JSON 格式要求如下（请严格遵守二选一）：
 
 
 SNARKY_RESULT_PROMPT = """你此时正在扮演拥有【{tone}】语气进行点评，
-你现在面对的是一个刚刚完成名为“{title}”测试的用户。
+你现在面对的是一个刚刚完成名为“{title}”鉴定的用户。
 
 用户最终被系统死板地评定为：【{cat_name}】
 系统的原版解析为：{base_desc}
 
-这是用户做题时选择的真实答题轨迹：
+这是用户做题时选择的真实测算轨迹：
 {trajectory}
 
 请根据得到的结果分类，给出一段结合了你设定以及深刻针对性的解读。
 要求：
-- 基于用户的答题记录进行解读，但不一定要提及具体选项。
+- 基于用户的测算记录进行解读，但不一定要提及具体选项。
 - 长度绝对不要超过 100 字。
 - 请直接输出解读正文，绝对不要带有“这是你的解读”或者问候语之类的废话结构。
 """
@@ -85,7 +85,7 @@ def extract_json(text: str) -> dict:
     # Find the first '{' and scan for matching '}' to extract a balanced JSON block
     start = text.find("{")
     if start == -1:
-        logger.warning("OrangeQuiz: extract_json found no '{' in LLM response.")
+        logger.warning("OrangeVibe: extract_json found no '{' in LLM response.")
         return None
     depth = 0
     for i in range(start, len(text)):
@@ -99,16 +99,16 @@ def extract_json(text: str) -> dict:
                     return json.loads(candidate)
                 except json.JSONDecodeError as e:
                     logger.warning(
-                        f"OrangeQuiz: JSON parse failed after extraction: {e}"
+                        f"OrangeVibe: JSON parse failed after extraction: {e}"
                     )
                     return None
     logger.warning(
-        "OrangeQuiz: extract_json could not find balanced braces in LLM response."
+        "OrangeVibe: extract_json could not find balanced braces in LLM response."
     )
     return None
 
 
-async def generate_quiz(
+async def generate_vibe(
     context: Context,
     provider_id: str,
     title: str,
@@ -129,7 +129,7 @@ async def generate_quiz(
 async def generate_snarky_eval(
     context: Context,
     provider_id: str,
-    quiz_title: str,
+    vibe_title: str,
     cat_name: str,
     base_desc: str,
     trajectory: str,
@@ -141,7 +141,7 @@ async def generate_snarky_eval(
         sys_instruction = f"当前，你正扮演以下人格设定，请务必保持此人设结合【{tone}】的语气来进行点评：\n{persona_prompt}\n\n"
 
     prompt = sys_instruction + SNARKY_RESULT_PROMPT.format(
-        title=quiz_title,
+        title=vibe_title,
         cat_name=cat_name,
         base_desc=base_desc,
         trajectory=trajectory,
@@ -149,5 +149,5 @@ async def generate_snarky_eval(
     )
     resp = await context.llm_generate(chat_provider_id=provider_id, prompt=prompt)
     if not resp or not resp.completion_text:
-        return "（由于神秘力量干扰，本大师现在不想吐槽你的问卷，算你好运。）"
+        return "（由于神秘力量干扰，本大师现在不想吐槽你的鉴定，算你好运。）"
     return resp.completion_text.strip()

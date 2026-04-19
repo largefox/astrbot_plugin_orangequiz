@@ -53,16 +53,28 @@
 
         .title {
             color: #4a4a4a;
-            font-size: 42px;
-            font-weight: 700;
+            font-size: 52px;
+            font-weight: 800;
             margin-bottom: 20px;
             text-align: center;
-            line-height: 1.6;
+            line-height: 1.7;
         }
 
         .user-name {
             color: #ee0979;
-            font-weight: bold;
+            font-weight: 900;
+            font-size: 60px;
+        }
+
+        .vibe-title-text {
+            display: block;
+            font-size: 68px;
+            font-weight: 900;
+            background: linear-gradient(to right, #ff6a00, #ee0979);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+            line-height: 1.4;
         }
 
         .divider {
@@ -94,6 +106,22 @@
             width: 100%;
             box-sizing: border-box;
             box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            position: relative;
+        }
+
+        .ai-title-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%);
+            color: #cc104b;
+            font-weight: 900;
+            font-size: 38px;
+            padding: 14px 32px;
+            border-radius: 24px 24px 24px 0;
+            margin-bottom: 28px;
+            box-shadow: 0 6px 20px rgba(255, 154, 158, 0.5);
+            letter-spacing: 2px;
+            border: 2px solid #fff;
         }
 
         .comment {
@@ -139,20 +167,71 @@
             border-radius: 20px;
             text-align: center;
         }
+
+        .same-attr-box {
+            background: rgba(255, 106, 0, 0.08);
+            border-radius: 20px;
+            padding: 25px 40px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .same-attr-title {
+            color: #ee0979;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .same-attr-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .same-attr-tag {
+            background: #fff;
+            color: #ff6a00;
+            padding: 8px 24px;
+            border-radius: 30px;
+            font-size: 28px;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(255, 106, 0, 0.15);
+            border: 1px solid rgba(255, 106, 0, 0.2);
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="title"><span class="user-name">{{ user_name }}</span> 的<br>{{ quiz_title }} 测试结果</div>
+        <div class="title"><span class="user-name">{{ user_name }}</span> 的<br><span class="vibe-title-text">{{ vibe_title }}</span><br>鉴定结果</div>
         
         <div class="divider"></div>
         
         <div class="cat-name">{{ cat_name }}</div>
         
         <div class="comment-box">
+            {% if ai_title %}
+            <div class="ai-title-badge">✨ {{ ai_title }}</div>
+            {% endif %}
             <div class="comment">{{ ai_comment }}</div>
         </div>
-        <div class="test-id-box">#quiz {{ display_id }}</div>
+        
+        {% if same_attr_members %}
+        <div class="same-attr-box">
+            <div class="same-attr-title">🎯 群里同样拥有该属性的同好有：</div>
+            <div class="same-attr-tags">
+                {% for member in same_attr_members %}
+                <div class="same-attr-tag">{{ member }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="test-id-box">{{ command_str }} {{ display_id }}</div>
         <div class="invite-tip">{{ invite_tip_text }}</div>
         <div class="footer">{{ footer_text }}</div>
     </div>

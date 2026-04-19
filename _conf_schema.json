@@ -1,50 +1,62 @@
 {
-  "_orangequiz_section": {
-    "description": "=== OrangeQuiz 问卷设置 ===",
+  "_orangevibe_section": {
+    "description": "=== OrangeVibe 鉴定设置 ===",
     "type": "text",
     "invisible": true
   },
   "invite_poster_tip": {
     "description": "海报说明文案",
     "type": "text",
-    "default": "对bot发送以上带有编号的指令，开始同款测试，分享测试结果！",
-    "hint": "展示在新问卷发布海报中间及结果海报下段的提示语句，可用 {test_id} 代替问卷专属号码"
+    "default": "对bot发送以上带有编号的指令，开始同款鉴定，分享测算特质！",
+    "hint": "展示在新方案发布海报中间及结果海报下段的提示语句，可用 {test_id} 代替鉴定方案专属号码"
   },
   "footer_text": {
     "description": "海报底部水印文字",
     "type": "text",
-    "default": "可以和bot私聊参与测试 \n -- 由 Astrbot 插件 OrangeQuiz 强力驱动 --",
+    "default": "可以和bot私聊参与鉴定 \n -- 由 Astrbot 插件 OrangeVibe 强力驱动 --",
     "hint": "自定义展示在生成结果海报最下方的尾标文字，支持输入多行"
   },
+  "ai_comment_title": {
+    "description": "AI解读前缀标题",
+    "type": "text",
+    "default": "AI解读",
+    "hint": "在渲染出的结果评价文本前面展示的小标题（如：AI解读、桔子点评等），留空则直接展示正文。"
+  },
   "allow_group_quiz": {
-    "description": "允许在群聊中互动答题",
+    "description": "允许在群聊中互动鉴定",
     "type": "bool",
     "default": false,
-    "hint": "✅ 开启: 不受限制。\n❌ 关闭: 群聊中发送指令将提示前往私聊进行（防刷屏）；但已做完测试的用户仍可以在群内触发自己的成绩海报。"
+    "hint": "✅ 开启: 不受限制。\n❌ 关闭: 群聊中发送指令将提示前往私聊进行（防刷屏）；但已做完鉴定的用户仍可以在群内触发自己的成分海报。"
+  },
+  "session_timeout_minutes": {
+    "description": "答题/制作超时时间（分钟）",
+    "type": "int",
+    "default": 10,
+    "hint": "用户在答题或制作鉴定方案时，超过该时长无操作将自动取消并发送超时提示。默认 10 分钟。"
   },
   "allow_group_create": {
-    "description": "允许在群聊中出题",
+    "description": "允许在群聊中制作鉴定",
     "type": "bool",
     "default": false,
-    "hint": "✅ 开启: 不受限制。\n❌ 关闭: 群聊中使用 /quiz_create 将提示前往私聊进行（防止生成问卷时刷屏）。"
+    "hint": "✅ 开启: 不受限制。\n❌ 关闭: 群聊中使用 /vibe_create 将提示前往私聊进行（防止生成时刷屏）。"
   },
   "daily_create_limit": {
-    "description": "每日生成测试次数上限",
+    "description": "每日制作鉴定方案次数上限",
     "type": "int",
     "default": 3,
-    "hint": "每个用户每天最多能用AI生成几份新问卷（Bot管理员无视此限制）"
+    "hint": "每个用户每天最多能用AI制作几个新鉴定方案（Bot管理员无视此限制）"
   },
   "max_modify_count": {
-    "description": "每次生成问卷的修改次数上限",
+    "description": "每次制作鉴定方案的修改次数上限",
     "type": "int",
     "default": 8,
-    "hint": "在生成一份新问卷的过程中，最多允许对AI要求微调修改几次"
+    "hint": "在制作一个新的鉴定方案的过程中，最多允许对AI要求微调修改几次"
   },
   "admin_only_create": {
-    "description": "仅限管理员新增问卷",
+    "description": "仅限管理员新增鉴定方案",
     "type": "bool",
     "default": false,
-    "hint": "✅ 开启: 只有Bot管理员可以使用 /quiz_create 创建新问卷。\n❌ 关闭: 所有人均可创建（受每日上限限制）。"
+    "hint": "✅ 开启: 只有Bot管理员可以使用 /vibe_create 制作新鉴定方案。\n❌ 关闭: 所有人均可创建（受每日上限限制）。"
   },
   "result_theme": {
     "description": "结果海报主题",

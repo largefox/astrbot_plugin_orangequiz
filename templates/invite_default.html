@@ -68,14 +68,14 @@
 
         .desc-box {
             color: #555;
-            font-size: 28px;
+            font-size: 40px;
             font-weight: 400;
             margin-bottom: 40px;
             text-align: center;
-            line-height: 1.6;
+            line-height: 1.7;
             max-width: 90%;
             background: rgba(0, 118, 255, 0.05);
-            padding: 20px 40px;
+            padding: 30px 50px;
             border-radius: 20px;
             border-left: 6px solid #0076ff;
         }
@@ -116,12 +116,12 @@
 </head>
 <body>
     <div class="card">
-        <div class="header-badge">🆕 全新测试发布</div>
-        <div class="title">{{ quiz_title }}</div>
+        <div class="header-badge">🆕 全新鉴定发布</div>
+        <div class="title">{{ vibe_title }}</div>
         <div class="subtitle">共包含 {{ q_count }} 道题目 · 作者: <span style="color:#0076ff; font-weight:bold;">{{ author_name }}</span></div>
-        <div class="desc-box">{{ quiz_desc }}</div>
+        <div class="desc-box">{{ vibe_desc }}</div>
         
-        <div class="test-id-box">#quiz {{ display_id }}</div>
+        <div class="test-id-box">{{ command_str }} {{ display_id }}</div>
         <div class="invite-tip">{{ invite_tip_text }}</div>
         
         <div class="footer">{{ footer_text }}</div>
