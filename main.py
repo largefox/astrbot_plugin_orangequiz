@@ -14,6 +14,8 @@ from astrbot.api import logger
 from astrbot.core.message.message_event_result import MessageChain
 from .utils.ai_handler import generate_vibe, generate_snarky_eval
 from .utils.db_handler import DatabaseHandler
+
+
 @register(
     "astrbot_plugin_orangevibe",
     "largefox",
@@ -57,7 +59,6 @@ class OrangeVibe(Star):
         # Generate default vibe if not exists
         default_vibe_path = self.quizzes_dir / "000001.json"
         if not os.path.exists(default_vibe_path):
-
             default_vibe = {
                 "id": "000001",
                 "title": "你对可爱狐狐的接受程度鉴定",
@@ -159,8 +160,10 @@ class OrangeVibe(Star):
                     (self.create_sessions, "制作鉴定"),
                 ]:
                     expired_keys = [
-                        k for k, v in list(map_dict.items())
-                        if current_time - v.get("last_active", current_time) > timeout_sec
+                        k
+                        for k, v in list(map_dict.items())
+                        if current_time - v.get("last_active", current_time)
+                        > timeout_sec
                     ]
                     for k in expired_keys:
                         sess = map_dict.pop(k, None)
@@ -177,7 +180,9 @@ class OrangeVibe(Star):
                                 )
                                 await self.context.send_message(umo, chain)
                             except Exception as notify_err:
-                                logger.warning(f"OrangeVibe: 超时通知发送失败: {notify_err}")
+                                logger.warning(
+                                    f"OrangeVibe: 超时通知发送失败: {notify_err}"
+                                )
             except Exception as e:
                 logger.error(f"OrangeVibe cleanup loop error: {e}", exc_info=True)
             # 每分钟检查一次
@@ -221,7 +226,9 @@ class OrangeVibe(Star):
 
             # 如果当前会话没有绑定特定人格或获取失败，自动回退到全局默认人格
             if not persona:
-                persona = getattr(self.context.persona_manager, "selected_default_persona", None)
+                persona = getattr(
+                    self.context.persona_manager, "selected_default_persona", None
+                )
 
             if persona:
                 prompt_val = getattr(
@@ -230,7 +237,9 @@ class OrangeVibe(Star):
                     getattr(
                         persona,
                         "prompt",
-                        getattr(persona, "description", getattr(persona, "bot_info", "")),
+                        getattr(
+                            persona, "description", getattr(persona, "bot_info", "")
+                        ),
                     ),
                 )
                 if prompt_val and isinstance(prompt_val, str):
@@ -263,14 +272,14 @@ class OrangeVibe(Star):
         files.sort()
         per_page = 10
         total_pages = max(1, (len(files) + per_page - 1) // per_page)
-        
+
         if page < 1:
             page = 1
         elif page > total_pages:
             page = total_pages
-            
+
         start_idx = (page - 1) * per_page
-        page_files = files[start_idx:start_idx+per_page]
+        page_files = files[start_idx : start_idx + per_page]
 
         reply = f"=== 可用鉴定列表 (第 {page}/{total_pages} 页) ===\n"
         loaded = 0
@@ -325,49 +334,59 @@ class OrangeVibe(Star):
         await self._ensure_init()
         test_id = test_id.strip()
         if not test_id:
-            yield event.plain_result(f"请提供要删除的鉴定编号，例如: {self.get_prefix()}vibe_del 123456")
+            yield event.plain_result(
+                f"请提供要删除的鉴定编号，例如: {self.get_prefix()}vibe_del 123456"
+            )
             return
-            
+
         filepath = self.quizzes_dir / f"{test_id}.json"
         if not os.path.exists(filepath):
             yield event.plain_result(f"找不到编号为 {test_id} 的鉴定。")
             return
-            
+
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 vibe_data = json.load(f)
         except Exception as e:
             yield event.plain_result(f"读取鉴定数据失败: {e}")
             return
-            
+
         user_id = event.get_sender_id()
         is_admin = self._is_admin(user_id)
-        
+
         # Determine permission: Authorship checked via user ID (needs to match bot admin logic if we didn't track author IDs accurately before)
         # Note: In older vibe logic, we stored author name but not author ID. We need to check if we stored author_id, otherwise rely on admin only or user name.
         author_id = vibe_data.get("author_id", "")
         author_name = vibe_data.get("author", "未知")
-        
+
         # If we have author_id, check it. If not, fallback to sender_name matching or admin fallback
         has_permission = False
         if is_admin:
             has_permission = True
         elif author_id and str(user_id) == str(author_id):
             has_permission = True
-        elif hasattr(event, "get_sender_name") and event.get_sender_name() == author_name:
+        elif (
+            hasattr(event, "get_sender_name") and event.get_sender_name() == author_name
+        ):
             has_permission = True
-            
+
         if not has_permission:
-            yield event.plain_result(f"权限不足！您必须是该鉴定的创建者或机器人管理员才能删除。此鉴定原作者为: {author_name}")
+            yield event.plain_result(
+                f"权限不足！您必须是该鉴定的创建者或机器人管理员才能删除。此鉴定原作者为: {author_name}"
+            )
             return
-            
+
         try:
             os.remove(filepath)
-            yield event.plain_result(f"✅ 成功删除鉴定 {test_id}: 《{vibe_data.get('title', '未知')}》")
+            yield event.plain_result(
+                f"✅ 成功删除鉴定 {test_id}: 《{vibe_data.get('title', '未知')}》"
+            )
         except Exception as e:
             yield event.plain_result(f"删除失败: {e}")
 
-    @filter.command("vibe_create", alias=["制作鉴定", "搓鉴定", "创建鉴定", "出题"], priority=1)
+    @filter.command(
+        "vibe_create", alias=["制作鉴定", "搓鉴定", "创建鉴定", "出题"], priority=1
+    )
     async def vibe_create(self, event: AstrMessageEvent):
         event.stop_event()
         user_id = event.get_sender_id()
@@ -421,7 +440,6 @@ class OrangeVibe(Star):
         await self._ensure_init()
 
         args_str = f"{a1} {a2} {a3}".lower().strip()
-
 
         session_key = f"{event.unified_msg_origin}_{event.get_sender_id()}"
         if session_key in self.create_sessions:
@@ -490,7 +508,10 @@ class OrangeVibe(Star):
                     )
                     yield event.image_result(url)
                 except Exception as e:
-                    logger.error(f"OrangeVibe: poster render failed for history replay: {e}", exc_info=True)
+                    logger.error(
+                        f"OrangeVibe: poster render failed for history replay: {e}",
+                        exc_info=True,
+                    )
                     yield event.plain_result(
                         f"⚠️ 海报生成失败（{type(e).__name__}: {e}）\n"
                         f"您的结果：{history['result_name']}\n"
@@ -511,13 +532,13 @@ class OrangeVibe(Star):
             if not outcomes:
                 yield event.plain_result("该纯抽卡鉴定奖池配置异常。")
                 return
-            
+
             picked = random.choice(outcomes)
             cat_name = picked.get("name", "神秘结果")
             base_desc = picked.get("desc", "没有更多描述。")
-            
+
             yield event.plain_result("🎲 正在为您祈愿抽签，请稍候...")
-            
+
             ai_comment = await generate_snarky_eval(
                 self.context,
                 self.config.get("provider_id", ""),
@@ -530,7 +551,7 @@ class OrangeVibe(Star):
             )
             if not ai_comment:
                 ai_comment = f"{cat_name}：{base_desc}"
-                
+
             await self.db.record_play(
                 event.get_sender_id(),
                 event.get_sender_name(),
@@ -538,7 +559,7 @@ class OrangeVibe(Star):
                 cat_name,
                 ai_comment,
             )
-            
+
             try:
                 url = await self._render_poster(
                     event,
@@ -577,7 +598,9 @@ class OrangeVibe(Star):
             f"开始了！{vibe_data.get('title')} (作者: {author}){desc_line}\n\n{self._format_question(vibe_data, 0)}"
         )
 
-    @filter.command("vibe_stop", alias=["退出鉴定", "停止鉴定", "结束", "取消", "退出"], priority=1)
+    @filter.command(
+        "vibe_stop", alias=["退出鉴定", "停止鉴定", "结束", "取消", "退出"], priority=1
+    )
     async def vibe_stop(self, event: AstrMessageEvent):
         event.stop_event()
         session_key = f"{event.unified_msg_origin}_{event.get_sender_id()}"
@@ -596,9 +619,7 @@ class OrangeVibe(Star):
             yield event.plain_result("✅ 已成功取消当前所有鉴定操作。")
 
     @filter.command("重测成分", alias=["重新鉴定", "再测成分"], priority=1)
-    async def vibe_retry_cmd(
-        self, event: AstrMessageEvent, test_id: str = ""
-    ):
+    async def vibe_retry_cmd(self, event: AstrMessageEvent, test_id: str = ""):
         """Shortcut for /测成分 <id> retry"""
         event.stop_event()
         await self._ensure_init()
@@ -612,7 +633,9 @@ class OrangeVibe(Star):
         # We patch a1/a2 manually by setting force_retry in the session and calling vibe_cmd logic inline
         vibe_data = self._load_vibe(test_id)
         if not vibe_data:
-            yield event.plain_result(f"找不到编码为 {test_id} 的鉴定，请检查编号是否正确。")
+            yield event.plain_result(
+                f"找不到编码为 {test_id} 的鉴定，请检查编号是否正确。"
+            )
             return
         is_group = "group" in event.unified_msg_origin.lower()
         allow_group = str(self.config.get("allow_group_vibe", False)).lower() != "false"
@@ -712,22 +735,30 @@ class OrangeVibe(Star):
         group_id = event.get_group_id()
         if group_id:
             try:
-                user_ids = await self.db.get_same_result_users(str(test_id), cat_name, str(event.get_sender_id()))
+                user_ids = await self.db.get_same_result_users(
+                    str(test_id), cat_name, str(event.get_sender_id())
+                )
                 if user_ids:
                     # 获取群成员列表，这里使用通用的调用（部分平台不支持会直接抛出异常被截获）
                     members_list = []
                     try:
-                        members_list = await event.bot.api.call_action('get_group_member_list', group_id=group_id)
+                        members_list = await event.bot.api.call_action(
+                            "get_group_member_list", group_id=group_id
+                        )
                     except AttributeError:
                         # 兼容部分没有直接挂载 call_action 的适配器
                         pass
-                        
+
                     if members_list:
                         user_ids_set = set(str(uid) for uid in user_ids)
                         for m in members_list:
                             uid_str = str(m.get("user_id", ""))
                             if uid_str in user_ids_set:
-                                same_attr_members.append(m.get("card") or m.get("nickname") or f"同好{uid_str[-4:]}")
+                                same_attr_members.append(
+                                    m.get("card")
+                                    or m.get("nickname")
+                                    or f"同好{uid_str[-4:]}"
+                                )
                         same_attr_members = same_attr_members[:5]  # 限定最多显示5个
             except Exception as e:
                 logger.error(f"OrangeVibe Error fetching same attr group members: {e}")
@@ -819,9 +850,7 @@ class OrangeVibe(Star):
         summary = f"📋 【鉴定预览】\n标题：{vibe_data.get('title')}\n简介：{desc}\n作者：{author}\n题数：{q_count}\n"
 
         if vibe_data.get("type") == "gacha":
-            summary += (
-                "分发机制：【纯抽卡盲盒（无需测算，群聊直出）】\n\n"
-            )
+            summary += "分发机制：【纯抽卡盲盒（无需测算，群聊直出）】\n\n"
             summary += "=== 可能摇出的结局池 ===\n"
             r_logic = vibe_data.get("results_logic", {})
             for r in r_logic.get("outcomes", []):
@@ -890,19 +919,46 @@ class OrangeVibe(Star):
             prefixes = [prefixes]
         elif not isinstance(prefixes, list):
             prefixes = ["/"]
-            
+
         for prefix in prefixes:
             if prefix and msg.startswith(prefix):
                 return
 
         cmd_keywords = [
-            "vibe", "鉴定", "测成分", "重测成分", "重新鉴定", "再测成分", "测算", "做题",
-            "vibe_list", "鉴定列表", "成分大厅",
-            "vibe_hot", "热门鉴定", "鉴定排名",
-            "vibe_create", "创建鉴定", "制作鉴定", "搓鉴定", "出题", "新增鉴定", "结命",
-            "vibe_del", "删除鉴定", "删库",
-            "vibe_stop", "退出鉴定", "停止鉴定", "结束测算", "结束", "取消", "退出",
-            "vibe_help", "鉴定帮助", "测算帮助",
+            "vibe",
+            "鉴定",
+            "测成分",
+            "重测成分",
+            "重新鉴定",
+            "再测成分",
+            "测算",
+            "做题",
+            "vibe_list",
+            "鉴定列表",
+            "成分大厅",
+            "vibe_hot",
+            "热门鉴定",
+            "鉴定排名",
+            "vibe_create",
+            "创建鉴定",
+            "制作鉴定",
+            "搓鉴定",
+            "出题",
+            "新增鉴定",
+            "结命",
+            "vibe_del",
+            "删除鉴定",
+            "删库",
+            "vibe_stop",
+            "退出鉴定",
+            "停止鉴定",
+            "结束测算",
+            "结束",
+            "取消",
+            "退出",
+            "vibe_help",
+            "鉴定帮助",
+            "测算帮助",
         ]
         if any(msg.startswith(kw) for kw in cmd_keywords):
             return
@@ -943,7 +999,9 @@ class OrangeVibe(Star):
     # 结命状态机处理器
     # ─────────────────────────────────────────────────────────
 
-    async def _handle_create_session(self, event: AstrMessageEvent, session_key: str, msg: str):
+    async def _handle_create_session(
+        self, event: AstrMessageEvent, session_key: str, msg: str
+    ):
         """处理结命流程各阶段。"""
         c_session = self.create_sessions[session_key]
         step = c_session.get("step")
@@ -958,7 +1016,7 @@ class OrangeVibe(Star):
             c_session["title"] = msg
             c_session["step"] = "AWAITING_CONTENT"
             yield event.plain_result(
-                "好的！接下来，请描述希望AI如何为您规划这场鉴定（如：想要一个对男猫娘接受程度的鉴定、包含两道题目的粗略成分鉴定，或者直接说\"如题\"）。如果你已有初步构思，可以直接在此发送，AI 会将之转化为题目与选项："
+                '好的！接下来，请描述希望AI如何为您规划这场鉴定（如：想要一个对男猫娘接受程度的鉴定、包含两道题目的粗略成分鉴定，或者直接说"如题"）。如果你已有初步构思，可以直接在此发送，AI 会将之转化为题目与选项：'
             )
             return
 
@@ -981,19 +1039,21 @@ class OrangeVibe(Star):
             async for result in self._handle_confirmation(event, session_key, msg):
                 yield result
 
-    async def _generate_and_preview_vibe(self, event: AstrMessageEvent, session_key: str):
+    async def _generate_and_preview_vibe(
+        self, event: AstrMessageEvent, session_key: str
+    ):
         """调用 LLM 生成鉴定草稿并向用户展示预览。"""
         c_session = self.create_sessions[session_key]
         c_session["step"] = "GENERATING"
         yield event.plain_result("🔍 正在绞尽脑汁为你生成鉴定，请稍候...")
 
-        provider_id = await self.context.get_current_chat_provider_id(event.unified_msg_origin)
+        provider_id = await self.context.get_current_chat_provider_id(
+            event.unified_msg_origin
+        )
 
         actual_content = c_session["content"]
         if c_session.get("feedback_mod"):
-            actual_content += (
-                f"\n\n注意！我对之前生成的草稿不满意，请进行以下综合修改，重新出一份：\n{c_session['feedback_mod']}"
-            )
+            actual_content += f"\n\n注意！我对之前生成的草稿不满意，请进行以下综合修改，重新出一份：\n{c_session['feedback_mod']}"
 
         vibe_data = await generate_vibe(
             self.context,
@@ -1011,7 +1071,9 @@ class OrangeVibe(Star):
             )
             return
 
-        author_name = event.get_sender_name() if hasattr(event, "get_sender_name") else "玩家"
+        author_name = (
+            event.get_sender_name() if hasattr(event, "get_sender_name") else "玩家"
+        )
         vibe_data["author"] = author_name
         vibe_data["author_id"] = str(event.get_sender_id())
         c_session["draft_vibe"] = vibe_data
@@ -1023,7 +1085,9 @@ class OrangeVibe(Star):
 
         yield event.plain_result(self._format_preview(vibe_data) + warning)
 
-    async def _handle_confirmation(self, event: AstrMessageEvent, session_key: str, msg: str):
+    async def _handle_confirmation(
+        self, event: AstrMessageEvent, session_key: str, msg: str
+    ):
         """处理用户在 AWAITING_CONFIRMATION 状态下的确认/修改/重生成操作。"""
         c_session = self.create_sessions[session_key]
         max_mod = int(self.config.get("max_modify_count", 8))
@@ -1045,7 +1109,9 @@ class OrangeVibe(Star):
             vibe_data["test_id"] = test_id
 
             try:
-                with open(self.quizzes_dir / f"{test_id}.json", "w", encoding="utf-8") as f:
+                with open(
+                    self.quizzes_dir / f"{test_id}.json", "w", encoding="utf-8"
+                ) as f:
                     json.dump(vibe_data, f, ensure_ascii=False, indent=2)
                 await self.db.record_create(event.get_sender_id())
                 yield event.plain_result(
@@ -1053,11 +1119,14 @@ class OrangeVibe(Star):
                 )
                 try:
                     invite_url = await self._render_invite_poster(
-                        event, test_id,
+                        event,
+                        test_id,
                         vibe_data.get("title", "未知鉴定"),
                         len(vibe_data.get("questions", [])),
                         vibe_data.get("author", "玩家"),
-                        vibe_data.get("desc", "这是一份超有趣的属性鉴定鉴定，快来试试看吧！"),
+                        vibe_data.get(
+                            "desc", "这是一份超有趣的属性鉴定鉴定，快来试试看吧！"
+                        ),
                     )
                     if invite_url:
                         yield event.image_result(invite_url)
@@ -1099,7 +1168,9 @@ class OrangeVibe(Star):
     # 测算状态机处理器
     # ─────────────────────────────────────────────────────────
 
-    async def _handle_vibe_session(self, event: AstrMessageEvent, session_key: str, msg: str):
+    async def _handle_vibe_session(
+        self, event: AstrMessageEvent, session_key: str, msg: str
+    ):
         """处理用户测算过程的全生命周期。"""
         session = self.sessions[session_key]
 
@@ -1109,7 +1180,9 @@ class OrangeVibe(Star):
             vibe_data = self._load_vibe(vibe_id)
             if not vibe_data:
                 del self.sessions[session_key]
-                yield event.plain_result(f"找不到编码为 {vibe_id} 的鉴定，已为您取消当前操作。")
+                yield event.plain_result(
+                    f"找不到编码为 {vibe_id} 的鉴定，已为您取消当前操作。"
+                )
                 return
             questions = vibe_data.get("questions", [])
             if not questions:
@@ -1150,19 +1223,29 @@ class OrangeVibe(Star):
             if 0 <= idx < len(question["options"]):
                 answer = str(question["options"][idx].get("label", "")).strip().upper()
 
-        valid_labels = [str(opt.get("label", "")).strip().upper() for opt in question["options"]]
+        valid_labels = [
+            str(opt.get("label", "")).strip().upper() for opt in question["options"]
+        ]
         if answer not in valid_labels:
             event.stop_event()
-            yield event.plain_result(f"无效的选项，请重新输入（有效选项: {', '.join(valid_labels)}）")
+            yield event.plain_result(
+                f"无效的选项，请重新输入（有效选项: {', '.join(valid_labels)}）"
+            )
             return
 
         selected_opt = next(
-            (opt for opt in question["options"] if str(opt.get("label", "")).strip().upper() == answer),
+            (
+                opt
+                for opt in question["options"]
+                if str(opt.get("label", "")).strip().upper() == answer
+            ),
             None,
         )
         if selected_opt and "weights" in selected_opt:
             for category, weight in selected_opt["weights"].items():
-                session["scores"][category] = session["scores"].get(category, 0) + weight
+                session["scores"][category] = (
+                    session["scores"].get(category, 0) + weight
+                )
 
         opt_text = selected_opt["text"] if selected_opt else answer
         session["trajectory"].append(f"Q: {question['text']} -> A: {opt_text}")
@@ -1181,7 +1264,9 @@ class OrangeVibe(Star):
 
         cat_name, cat_desc = self._resolve_result(vibe_data, session)
 
-        provider_id = await self.context.get_current_chat_provider_id(event.unified_msg_origin)
+        provider_id = await self.context.get_current_chat_provider_id(
+            event.unified_msg_origin
+        )
         traj_str = "\n".join(session["trajectory"])
         tone = vibe_data.get("ai_tone", "可爱+专业")
 
@@ -1190,9 +1275,13 @@ class OrangeVibe(Star):
             try:
                 snarky_eval = await asyncio.wait_for(
                     generate_snarky_eval(
-                        self.context, provider_id,
+                        self.context,
+                        provider_id,
                         vibe_data.get("title", "未知鉴定"),
-                        cat_name, cat_desc, traj_str, tone,
+                        cat_name,
+                        cat_desc,
+                        traj_str,
+                        tone,
                         persona_prompt=await self._get_persona_prompt(event),
                     ),
                     timeout=60.0,
@@ -1203,7 +1292,9 @@ class OrangeVibe(Star):
                 if attempt == 2:
                     if session_key in self.sessions:
                         del self.sessions[session_key]
-                    yield event.plain_result("⚠️ 生成 AI 评论连续 3 次超时或失败，已自动取消本次结算。请稍后再试。")
+                    yield event.plain_result(
+                        "⚠️ 生成 AI 评论连续 3 次超时或失败，已自动取消本次结算。请稍后再试。"
+                    )
                     return
                 await asyncio.sleep(2)
 
@@ -1211,17 +1302,23 @@ class OrangeVibe(Star):
 
         try:
             user_id = event.get_sender_id()
-            user_name = event.get_sender_name() if hasattr(event, "get_sender_name") else "玩家"
-            await self.db.record_play(user_id, user_name, session["test_id"], cat_name, snarky_eval)
+            user_name = (
+                event.get_sender_name() if hasattr(event, "get_sender_name") else "玩家"
+            )
+            await self.db.record_play(
+                user_id, user_name, session["test_id"], cat_name, snarky_eval
+            )
 
             url = None
             for attempt in range(3):
                 try:
                     url = await asyncio.wait_for(
                         self._render_poster(
-                            event, session["test_id"],
+                            event,
+                            session["test_id"],
                             vibe_data.get("title", "未知鉴定"),
-                            cat_name, snarky_eval,
+                            cat_name,
+                            snarky_eval,
                         ),
                         timeout=60.0,
                     )
@@ -1243,7 +1340,9 @@ class OrangeVibe(Star):
         except Exception as e:
             if session_key in self.sessions:
                 del self.sessions[session_key]
-            yield event.plain_result(result_text + f"\n\n(图片生成已降级，因出现错误：{e})")
+            yield event.plain_result(
+                result_text + f"\n\n(图片生成已降级，因出现错误：{e})"
+            )
 
     def _resolve_result(self, vibe_data: dict, session: dict) -> tuple:
         """根据鉴定类型和测算分数，计算最终结果分类名称与描述。"""
@@ -1267,4 +1366,3 @@ class OrangeVibe(Star):
                 if r["min"] <= cat_score <= r["max"]:
                     return r.get("name", max_cat), r.get("desc", r.get("base_desc", ""))
         return result_logic.get("name", max_cat), result_logic.get("base_desc", "")
-

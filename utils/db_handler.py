@@ -2,6 +2,7 @@ from pathlib import Path
 import aiosqlite
 import datetime
 
+
 class DatabaseHandler:
     def __init__(self, db_dir: str):
         self.db_path = Path(db_dir) / "orangevibe.db"
@@ -34,7 +35,14 @@ class DatabaseHandler:
             """)
             await db.commit()
 
-    async def record_play(self, user_id: str, user_name: str, test_id: str, result_name: str, ai_comment: str):
+    async def record_play(
+        self,
+        user_id: str,
+        user_name: str,
+        test_id: str,
+        result_name: str,
+        ai_comment: str,
+    ):
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         async with aiosqlite.connect(self.db_path, timeout=15.0) as db:
             await db.execute(
@@ -67,7 +75,9 @@ class DatabaseHandler:
                     for row in rows
                 ]
 
-    async def get_same_result_users(self, test_id: str, result_name: str, exclude_user_id: str):
+    async def get_same_result_users(
+        self, test_id: str, result_name: str, exclude_user_id: str
+    ):
         """Fetch a list of user_ids who got the identical result_name on the identical test_id, excluding oneself."""
         async with aiosqlite.connect(self.db_path, timeout=15.0) as db:
             db.row_factory = aiosqlite.Row
@@ -103,5 +113,8 @@ class DatabaseHandler:
     async def record_create(self, user_id: str):
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         async with aiosqlite.connect(self.db_path, timeout=15.0) as db:
-            await db.execute("INSERT INTO create_history (user_id, created_at) VALUES (?, ?)", (user_id, now_str))
+            await db.execute(
+                "INSERT INTO create_history (user_id, created_at) VALUES (?, ?)",
+                (user_id, now_str),
+            )
             await db.commit()
