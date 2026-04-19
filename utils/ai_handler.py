@@ -73,16 +73,16 @@ SNARKY_RESULT_PROMPT = """你此时正在扮演拥有【{tone}】语气进行点
 def extract_json(text: str) -> dict:
     """Extract the first valid JSON object from a text string."""
     text = text.strip()
-    # Remove markdown code block fences if present
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"\n?```$", "", text.strip())
-    # Try direct parse first
+    # 使用 re.search 设法，即使 LLM 在代码块前面输出了序言文字也能正确推算
+    code_block = re.search(r"```[a-zA-Z]*\n?(.*?)\n?```", text, re.DOTALL)
+    if code_block:
+        text = code_block.group(1).strip()
+    # 先尝试直接解析
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Find the first '{' and scan for matching '}' to extract a balanced JSON block
+    # 找第一个 '{' 并扫描匹配的 '}' 提取平衡 JSON 块
     start = text.find("{")
     if start == -1:
         logger.warning("OrangeVibe: extract_json found no '{' in LLM response.")
