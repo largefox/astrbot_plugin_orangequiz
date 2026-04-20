@@ -1,7 +1,14 @@
 from pathlib import Path
 import aiosqlite
 import asyncio
-import datetime
+import time
+import logging
+
+logger = logging.getLogger("astrbot")
+
+# 写操作最大重试次数（应对 SQLITE_BUSY）
+_MAX_WRITE_RETRIES = 3
+_RETRY_DELAY = 0.5
 
 
 class DatabaseHandler:
@@ -14,7 +21,7 @@ class DatabaseHandler:
         """初始化数据库，建立持久连接并开启 WAL 模式。"""
         self._conn = await aiosqlite.connect(self.db_path, timeout=15.0)
         self._conn.row_factory = aiosqlite.Row
-        # 开启 WAL 日志模式，大幅提升并发写入性能并减少锁冲突
+        # 开启 WAL 日志模式，大幅提升并发读写性能并减少锁冲突
         await self._conn.execute("PRAGMA journal_mode=WAL;")
         await self._conn.execute("""
             CREATE TABLE IF NOT EXISTS play_history (
@@ -24,7 +31,7 @@ class DatabaseHandler:
                 test_id TEXT,
                 result_name TEXT,
                 ai_comment TEXT,
-                created_at TEXT NOT NULL
+                created_at REAL NOT NULL
             )
         """)
         await self._conn.execute("""
@@ -37,7 +44,7 @@ class DatabaseHandler:
             CREATE TABLE IF NOT EXISTS create_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT,
-                created_at TEXT NOT NULL
+                created_at REAL NOT NULL
             )
         """)
         # 在 created_at 上建索引，加速区间查询
@@ -52,6 +59,22 @@ class DatabaseHandler:
             await self._conn.close()
             self._conn = None
 
+    async def _exec_write(self, coro_fn):
+        """带重试的写操作包装器，应对偶发的 SQLITE_BUSY。"""
+        async with self._lock:
+            for attempt in range(1, _MAX_WRITE_RETRIES + 1):
+                try:
+                    await coro_fn()
+                    return
+                except Exception as e:
+                    if "locked" in str(e).lower() and attempt < _MAX_WRITE_RETRIES:
+                        logger.warning(
+                            f"OrangeVibe DB write retry {attempt}/{_MAX_WRITE_RETRIES}: {e}"
+                        )
+                        await asyncio.sleep(_RETRY_DELAY * attempt)
+                    else:
+                        raise
+
     async def record_play(
         self,
         user_id: str,
@@ -60,14 +83,15 @@ class DatabaseHandler:
         result_name: str,
         ai_comment: str,
     ):
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        async with self._lock:
+        now_ts = time.time()
+
+        async def _do():
             await self._conn.execute(
                 """
                 INSERT INTO play_history (user_id, user_name, test_id, result_name, ai_comment, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, user_name, test_id, result_name, ai_comment, now_str),
+                (user_id, user_name, test_id, result_name, ai_comment, now_ts),
             )
             await self._conn.execute(
                 """
@@ -78,6 +102,8 @@ class DatabaseHandler:
                 (test_id,),
             )
             await self._conn.commit()
+
+        await self._exec_write(_do)
 
     async def get_hot_quizzes(self, limit: int = 5):
         async with self._conn.execute(
@@ -110,26 +136,29 @@ class DatabaseHandler:
             return dict(row) if row else None
 
     async def get_daily_create_count(self, user_id: str) -> int:
-        # 使用区间查询代替 date() 函数，避免因函数包裹导致索引失效
+        # 使用 UNIX 时间戳的数值区间比较，无需依赖字符串字典序
+        import datetime
+
         now = datetime.datetime.now()
-        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-        day_end = (now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        day_start_ts = now.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).timestamp()
+        day_end_ts = day_start_ts + 86400  # +24h
         async with self._conn.execute(
             "SELECT COUNT(*) FROM create_history WHERE user_id = ? AND created_at >= ? AND created_at < ?",
-            (user_id, day_start, day_end),
+            (user_id, day_start_ts, day_end_ts),
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else 0
 
     async def record_create(self, user_id: str):
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        async with self._lock:
+        now_ts = time.time()
+
+        async def _do():
             await self._conn.execute(
                 "INSERT INTO create_history (user_id, created_at) VALUES (?, ?)",
-                (user_id, now_str),
+                (user_id, now_ts),
             )
             await self._conn.commit()
+
+        await self._exec_write(_do)

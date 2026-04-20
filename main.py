@@ -24,9 +24,37 @@ from .utils.db_handler import DatabaseHandler
     "",
 )
 class OrangeVibe(Star):
+    # 集中维护所有指令关键词，on_message 路由直接引用此常量
+    # 每次新增 @filter.command 或 alias 时同步更新此处即可
+    _CMD_KEYWORDS = frozenset([
+        # vibe / 测成分
+        "vibe", "鉴定", "测成分", "做题",
+        # 重测
+        "重测成分", "重新鉴定", "再测成分",
+        # list
+        "vibe_list", "鉴定列表", "成分大厅",
+        # hot
+        "vibe_hot", "热门鉴定", "鉴定排名",
+        # create
+        "vibe_create", "创建鉴定", "制作鉴定", "搓鉴定", "出题", "新增鉴定", "结命",
+        # del
+        "vibe_del", "删除鉴定", "删库",
+        # stop
+        "vibe_stop", "退出鉴定", "停止鉴定", "结束测算", "结束", "取消", "退出",
+        # help
+        "vibe_help", "鉴定帮助", "测算帮助",
+        # 通用
+        "测算",
+    ])
+
     async def terminate(self):
         if getattr(self, "_cleanup_task", None):
             self._cleanup_task.cancel()
+        if getattr(self, "db", None):
+            try:
+                await self.db.close()
+            except Exception as e:
+                logger.warning(f"OrangeVibe: db close error during terminate: {e}")
 
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -128,6 +156,7 @@ class OrangeVibe(Star):
 
     async def _temp_cleanup_loop(self):
         """Runs every 60s, cleans temp files and expired sessions (with timeout notification)."""
+        consecutive_errors = 0
         while True:
             try:
                 current_time = time.time()
@@ -171,10 +200,16 @@ class OrangeVibe(Star):
                                 logger.warning(
                                     f"OrangeVibe: 超时通知发送失败: {notify_err}"
                                 )
+                consecutive_errors = 0
             except asyncio.CancelledError:
                 raise
             except Exception as e:
+                consecutive_errors += 1
                 logger.error(f"OrangeVibe cleanup loop error: {e}", exc_info=True)
+                if consecutive_errors >= 5:
+                    logger.error("OrangeVibe: cleanup loop hit 5 consecutive errors, backing off to 5min interval.")
+                    await asyncio.sleep(300)
+                    continue
             # 每分钟检查一次
             await asyncio.sleep(60)
 
@@ -486,7 +521,7 @@ class OrangeVibe(Star):
                 # 群聊里直接展示海报即可，私聊里额外附一条操作提示
                 if "group" not in event.unified_msg_origin.lower():
                     yield event.plain_result(
-                        f"🔥 系统检测到您之前已经测过这份鉴定了！已为您智能调取当时的专属绝赞档案记录。\n（💡 偷偷告诉你：如果您想在群聊中炫耀结论，可以在任意已部署机器人的群内发送 {self.get_prefix()}测成分 {vibe_id} 展示海报！\n如果您想刷新命运重拿剧本，请发送 {self.get_prefix()}测成分 {vibe_id} retry）"
+                        f"🔥 系统检测到您之前已经测过这份鉴定了！已为您智能调取当时的专属绝赞档案记录。\n（💡 偷偷告诉你：如果您想在群聊中炫耀结论并拉取同款成分群友雷达，可以在任意已部署机器人的群内发送 {self.get_prefix()}测成分 {vibe_id} 展示海报！\n如果您想刷新命运重拿剧本，请发送 {self.get_prefix()}测成分 {vibe_id} retry）"
                     )
                 try:
                     url = await self._render_poster(
@@ -916,43 +951,8 @@ class OrangeVibe(Star):
             if prefix and msg.startswith(prefix):
                 return
 
-        cmd_keywords = [
-            "vibe",
-            "鉴定",
-            "测成分",
-            "重测成分",
-            "重新鉴定",
-            "再测成分",
-            "测算",
-            "做题",
-            "vibe_list",
-            "鉴定列表",
-            "成分大厅",
-            "vibe_hot",
-            "热门鉴定",
-            "鉴定排名",
-            "vibe_create",
-            "创建鉴定",
-            "制作鉴定",
-            "搓鉴定",
-            "出题",
-            "新增鉴定",
-            "结命",
-            "vibe_del",
-            "删除鉴定",
-            "删库",
-            "vibe_stop",
-            "退出鉴定",
-            "停止鉴定",
-            "结束测算",
-            "结束",
-            "取消",
-            "退出",
-            "vibe_help",
-            "鉴定帮助",
-            "测算帮助",
-        ]
-        if any(msg.startswith(kw) for kw in cmd_keywords):
+        # 使用类常量 _CMD_KEYWORDS 拦截已注册的指令关键词
+        if any(msg.startswith(kw) for kw in self._CMD_KEYWORDS):
             return
 
         await self._ensure_init()
@@ -1008,7 +1008,7 @@ class OrangeVibe(Star):
             c_session["title"] = msg
             c_session["step"] = "AWAITING_CONTENT"
             yield event.plain_result(
-                '好的！接下来，请描述希望AI如何为您规划这场鉴定（如：想要一个对男猫娘接受程度的鉴定、包含两道题目的粗略成分鉴定，或者直接说"如题"）。如果你已有初步构思，可以直接在此发送，AI 会将之转化为题目与选项：'
+                '好的！接下来，请描述希望AI如何为您制作这场鉴定（如：想要一个对男猫娘接受程度的鉴定、包含两道题目的粗略成分鉴定，或者直接说"如题"）。如果你已有初步构思或者类似题目数据，可以直接在此发送，AI 会将之转化为题目与选项：'
             )
             return
 
@@ -1016,7 +1016,7 @@ class OrangeVibe(Star):
             c_session["content"] = msg
             c_session["step"] = "AWAITING_TONE"
             yield event.plain_result(
-                "收到！最后，您希望被鉴定人在拿到结果报告时，接收到什么样的 AI 评语口吻？（如：毒舌犀利、温柔体贴、发疯文学、阴阳怪气...也可以是：赛博机械音、猫娘的口吻...）"
+                "收到！最后，您希望被鉴定人在拿到结果报告时，接收到什么样的 AI 评语口吻？（如：毒舌犀利、温柔可爱、发疯文学、阴阳怪气...也可以是：酱板鸭的口吻、猫娘的口吻...）"
             )
             return
 
